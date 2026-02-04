@@ -1,0 +1,11 @@
+{
+  "ano": 2015,
+  "ciclo_id": "2",
+  "ciclo_nome": "Adolescente",
+  "iteracao_pacote": 216,
+  "idade_label": "Adolescente",
+  "esc_id": "5",
+  "com_id": "2",
+  "sexo": "F",
+  "raca_id": "6"
+}
