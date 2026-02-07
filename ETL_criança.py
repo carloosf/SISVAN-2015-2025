@@ -41,7 +41,7 @@ HEADERS = {
 
 # Anos a coletar: começa em 2025 (onde há dados) e desce até 2015
 ANO_MAIS_RECENTE = 2025
-ANO_MAIS_ANTIGO = 2015
+ANO_MAIS_ANTIGO = 2023
 
 # Parâmetros base do payload (nuAno é definido por ano na requisição)
 PAYLOAD_BASE = {
