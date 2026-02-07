@@ -39,30 +39,26 @@ HEADERS = {
 # Códigos de Raça/Cor
 
 
-# Anos a coletar: começa em 2025 (onde há dados) e desce até 2015
-ANO_MAIS_RECENTE = 2025
-ANO_MAIS_ANTIGO = 2015
-
-# Parâmetros base do payload (nuAno é definido por ano na requisição)
+# Parâmetros base do payload
 PAYLOAD_BASE = {
     "tpRelatorio": "2",
     "coVisualizacao": "1",
-    "nuAno": "",
-    "nuMes[]": "99", 
+    "nuAno": "2024",
+    "nuMes[]": "01", 
     "tpFiltro": "M",
     "coRegiao": "",
     "coUfIbge": "26", 
-    "coMunicipioIbge": "99",  
+    "coMunicipioIbge": "261160",  
     "noRegional": "",
     "st_cobertura": "99",
     "nu_ciclo_vida": "1",
+    "nu_idade_inicio": "0", 
+    "nu_idade_fim": "1", 
     "nu_indice_cri": "1",
     "nu_indice_ado": "1",
     "nu_idade_ges": "99",
-    "ds_sexo2": "",
-    "ds_raca_cor2": "",
-    "nu_idade_inicio": "",
-    "nu_idade_fim": "",
+    "ds_sexo2": "M", 
+    "ds_raca_cor2": "01", 
     "co_sistema_origem": "0",
     "CO_POVO_COMUNIDADE": "TODOS",
     "CO_ESCOLARIDADE": "TODOS",
@@ -133,6 +129,7 @@ def processar_html_para_dataframe(html_content: str) -> Optional[pd.DataFrame]:
         if not tables:
             print("  ERRO: Nenhuma tabela encontrada no HTML")
             return None
+        print(f"  (Encontradas {len(tables)} tabela(s) no HTML)")
         linhas = []
         for table in tables:
             tbody = table.find('tbody')
@@ -173,41 +170,50 @@ def processar_html_para_dataframe(html_content: str) -> Optional[pd.DataFrame]:
 # FUNÇÕES DE REQUISIÇÃO HTTP
 # ============================================================================
 
-def criar_payload(raca_codigo: str, fase_idade: str, sexo_codigo: str, ano: int) -> Dict[str, str]:
-    """Cria payload para requisição com raça, fase de idade, sexo e ano"""
+def criar_payload(raca_codigo: str, fase_idade: int, sexo_codigo: str) -> Dict[str, str]:
+    """Cria payload para requisição com raça, fase de idade e sexo específicos"""
     payload = PAYLOAD_BASE.copy()
-    payload["nuAno"] = str(ano)
+    
     payload["ds_raca_cor2"] = raca_codigo
+    
     payload["ds_sexo2"] = sexo_codigo
+    
     idade_inicio, idade_fim, _ = FASES_IDADE[fase_idade]
     payload["nu_idade_inicio"] = str(idade_inicio)
     payload["nu_idade_fim"] = str(idade_fim)
+    
     return payload
 
 
-def fazer_requisicao(session: requests.Session, raca_codigo: str, fase_idade: str, sexo_codigo: str,
-                     ano: int, tentativa: int = 1, max_tentativas: int = 3) -> Optional[str]:
+def fazer_requisicao(session: requests.Session, raca_codigo: str, fase_idade: int, sexo_codigo: str,
+                     tentativa: int = 1, max_tentativas: int = 3) -> Optional[str]:
     """Faz requisição POST para API e retorna HTML"""
     raca_nome = RACAS.get(raca_codigo, "DESCONHECIDA")
     sexo_nome = SEXOS.get(sexo_codigo, "DESCONHECIDO")
     _, _, fase_nome = FASES_IDADE[fase_idade]
-    print(f"    [{tentativa}/{max_tentativas}] Ano {ano} | Raça: {raca_codigo}-{raca_nome} | "
+    
+    print(f"    [{tentativa}/{max_tentativas}] Raça: {raca_codigo}-{raca_nome} | "
           f"Sexo: {sexo_codigo}-{sexo_nome} | Fase: {fase_idade}-{fase_nome}")
-    payload = criar_payload(raca_codigo, fase_idade, sexo_codigo, ano)
+    
+    payload = criar_payload(raca_codigo, fase_idade, sexo_codigo)
+    
     try:
         response = session.post(URL_POST, data=payload, headers=HEADERS, timeout=30)
+        
         if response.status_code == 200:
             return response.text
-        print(f"      ERRO: Status {response.status_code}")
-        if tentativa < max_tentativas:
-            time.sleep(2)
-            return fazer_requisicao(session, raca_codigo, fase_idade, sexo_codigo, ano, tentativa + 1, max_tentativas)
-        return None
+        else:
+            print(f"      ERRO: Status {response.status_code}")
+            if tentativa < max_tentativas:
+                time.sleep(2)  # Aguardar antes de tentar novamente
+                return fazer_requisicao(session, raca_codigo, fase_idade, sexo_codigo, tentativa + 1, max_tentativas)
+            return None
+            
     except Exception as e:
         print(f"      ERRO na requisição: {e}")
         if tentativa < max_tentativas:
             time.sleep(2)
-            return fazer_requisicao(session, raca_codigo, fase_idade, sexo_codigo, ano, tentativa + 1, max_tentativas)
+            return fazer_requisicao(session, raca_codigo, fase_idade, sexo_codigo, tentativa + 1, max_tentativas)
         return None
 
 
@@ -215,21 +221,14 @@ def fazer_requisicao(session: requests.Session, raca_codigo: str, fase_idade: st
 # FUNÇÕES DE COLETA E CONSOLIDAÇÃO
 # ============================================================================
 
-def coletar_dados_para_ano(ano: int) -> pd.DataFrame:
-    """Coleta dados de todas as combinações (raça, fase, sexo) para um único ano. Adiciona coluna Ano."""
+def rodar_uma_vez() -> pd.DataFrame:
+    """Executa 1 requisição com o payload atual (1 contexto, 1 município) para conferir se os dados batem."""
     print("\n" + "=" * 80)
-    print(f"COLETANDO DADOS DO ANO {ano}")
+    print("TESTE: 1 CONTEXTO, 1 MUNICÍPIO (payload atual)")
     print("=" * 80)
-    # Mostrar payload usado neste ano (exemplo com primeira combinação)
-    payload_ano = criar_payload(
-        next(iter(RACAS.keys())),
-        next(iter(FASES_IDADE.keys())),
-        next(iter(SEXOS.keys())),
-        ano,
-    )
-    print(f"\nPayload para ano {ano}:")
-    for k, v in sorted(payload_ano.items()):
-        print(f"  {k}: {v}")
+    print(f"\nPayload: coMunicipioIbge={PAYLOAD_BASE.get('coMunicipioIbge')} | "
+          f"ds_raca_cor2={PAYLOAD_BASE.get('ds_raca_cor2')} | ds_sexo2={PAYLOAD_BASE.get('ds_sexo2')} | "
+          f"nu_idade_inicio={PAYLOAD_BASE.get('nu_idade_inicio')} nu_idade_fim={PAYLOAD_BASE.get('nu_idade_fim')}")
     session = requests.Session()
     print("\n1. Obtendo sessão do servidor...")
     try:
@@ -238,44 +237,30 @@ def coletar_dados_para_ano(ano: int) -> pd.DataFrame:
     except Exception as e:
         print(f"   ERRO ao obter sessão: {e}")
         return pd.DataFrame()
-    todos_dataframes = []
-    total_combinacoes = len(RACAS) * len(FASES_IDADE) * len(SEXOS)
-    combinacao_atual = 0
-    print(f"\n2. Coletando dados de {total_combinacoes} combinações para {ano}...")
-    print("-" * 80)
-    for raca_codigo in RACAS.keys():
-        for fase_idade in FASES_IDADE.keys():
-            for sexo_codigo in SEXOS.keys():
-                combinacao_atual += 1
-                print(f"\n[{combinacao_atual}/{total_combinacoes}] Processando combinação...")
-                html_content = fazer_requisicao(session, raca_codigo, fase_idade, sexo_codigo, ano)
-                if html_content is None:
-                    print("      AVISO: Não foi possível obter dados desta combinação")
-                    continue
-                df = processar_html_para_dataframe(html_content)
-                if df is None or df.empty:
-                    print("      AVISO: Nenhum dado encontrado nesta combinação")
-                    continue
-                raca_nome = RACAS[raca_codigo]
-                sexo_nome = SEXOS[sexo_codigo]
-                _, _, fase_nome = FASES_IDADE[fase_idade]
-                df["Ano"] = ano
-                df["Raca_Codigo"] = raca_codigo
-                df["Raca_Nome"] = raca_nome
-                df["Sexo_Codigo"] = sexo_codigo
-                df["Sexo_Nome"] = sexo_nome
-                df["Fase_Idade"] = fase_idade
-                df["Fase_Nome"] = fase_nome
-                todos_dataframes.append(df)
-                print(f"      OK - {len(df)} municípios encontrados")
-                time.sleep(1)
-    print(f"\n3. Consolidando dados do ano {ano}...")
-    if not todos_dataframes:
-        print("   ERRO: Nenhum dado foi coletado!")
+    print("\n2. Fazendo 1 requisição...")
+    try:
+        response = session.post(URL_POST, data=PAYLOAD_BASE, headers=HEADERS, timeout=30)
+        if response.status_code != 200:
+            print(f"   ERRO: Status {response.status_code}")
+            return pd.DataFrame()
+        print("   OK - Resposta recebida")
+    except Exception as e:
+        print(f"   ERRO na requisição: {e}")
         return pd.DataFrame()
-    df_final = pd.concat(todos_dataframes, ignore_index=True)
-    print(f"   OK - Total de {len(df_final)} registros para {ano}")
-    return df_final
+    # Debug: salvar HTML para inspeção quando o parser não encontrar dados
+    _debug_html = os.path.join(os.path.dirname(os.path.abspath(__file__)), "debug_response.html")
+    with open(_debug_html, "w", encoding="utf-8") as f:
+        f.write(response.text)
+    print(f"   (HTML salvo em {os.path.basename(_debug_html)} para inspeção)")
+    df = processar_html_para_dataframe(response.text)
+    if df is None:
+        print("   ERRO ao processar HTML")
+        return pd.DataFrame()
+    if df.empty:
+        print("   AVISO: Nenhum dado na tabela")
+    else:
+        print(f"   OK - {len(df)} linha(s) na tabela")
+    return df
 
 
 # ============================================================================
@@ -283,29 +268,28 @@ def coletar_dados_para_ano(ano: int) -> pd.DataFrame:
 # ============================================================================
 
 def main():
-    """Coleta por ano e salva um CSV por ano (com coluna Ano)."""
+    """Teste: 1 contexto, 1 município — rodar 1x para conferir se os dados batem."""
     print("=" * 80)
-    print("PROCESSADOR DE DADOS SISVAN - COLETA POR ANO")
+    print("SISVAN - TESTE 1 CONTEXTO / 1 MUNICÍPIO")
     print("=" * 80)
-    print("\nConfiguração:")
-    print(f"  - Anos: {ANO_MAIS_RECENTE} → {ANO_MAIS_ANTIGO} (começa em 2025 e desce)")
-    print(f"  - Raças: {len(RACAS)} | Sexos: {len(SEXOS)} | Fases de Idade: {len(FASES_IDADE)}")
-    print(f"  - Total de combinações por ano: {len(RACAS) * len(FASES_IDADE) * len(SEXOS)}")
-    for ano in range(ANO_MAIS_RECENTE, ANO_MAIS_ANTIGO - 1, -1):
-        df = coletar_dados_para_ano(ano)
-        if df.empty:
-            print(f"\n   AVISO: Nenhum dado para {ano}, pulando.")
-            continue
-        csv_output = f"dados_sisvan_racas_idades_{ano}.csv"
-        print(f"\n4. Salvando {csv_output} ({len(df)} registros, coluna Ano={ano})")
-        try:
-            salvar_csv_powerbi(df, csv_output)
-            print(f"   OK - {csv_output} salvo.")
-        except Exception as e:
-            print(f"   ERRO ao salvar: {e}")
-    print(f"\n{'=' * 80}")
-    print("PROCESSAMENTO CONCLUÍDO!")
-    print(f"{'=' * 80}")
+    df = rodar_uma_vez()
+    if df.empty:
+        print("\n" + "=" * 80)
+        print("Nenhum dado retornado. Verifique o payload e a resposta da API.")
+        print("=" * 80)
+        return
+    print("\n3. Dados retornados (para conferência):")
+    print(df.to_string())
+    csv_output = "dados_sisvan_teste_1municipio.csv"
+    print(f"\n4. Salvando CSV: {csv_output}")
+    try:
+        salvar_csv_powerbi(df, csv_output)
+        print(f"   OK - Salvo (formato Power BI: separador ;, decimal ,).")
+    except Exception as e:
+        print(f"   ERRO ao salvar CSV: {e}")
+    print("\n" + "=" * 80)
+    print("TESTE CONCLUÍDO")
+    print("=" * 80)
 
 
 if __name__ == "__main__":

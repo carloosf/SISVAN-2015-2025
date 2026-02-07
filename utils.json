@@ -12,8 +12,8 @@
     "F": "FEMININO"
   },
   "FASES_IDADE": {
-    "1": [0, 0.5, "MENOR_DE_6_MESES"],
-    "2": [0.5, 2, "ENTRE_6_MESES_A_2_ANOS"],
+    "1": [0, 1, "MENOR_DE_6_MESES"],
+    "2": [1, 2, "ENTRE_6_MESES_A_2_ANOS"],
     "3": [2, 5, "ENTRE_2_ANOS_A_5_ANOS"],
     "4": [5, 7, "ENTRE_5_ANOS_A_7_ANOS"],
     "5": [7, 10, "ENTRE_7_ANOS_A_10_ANOS"]
